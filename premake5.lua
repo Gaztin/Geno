@@ -16,6 +16,7 @@ startproject( 'Geno' )
 third_party_library 'glew'
 third_party_library 'glfw'
 third_party_library 'imgui'
+third_party_library 'llvm-libllvm'
 third_party_library 'llvm-tablegen'
 
 library 'Common'
