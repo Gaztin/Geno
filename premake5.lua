@@ -13,12 +13,21 @@ platforms( utils.get_platforms() )
 configurations { 'Debug', 'Release' }
 startproject( 'Geno' )
 
+function tablegen( output, input, flags )
+	return 'echo TableGen on '..output..' && "%{path.join(wks.location,"bin",cfg.platform,cfg.buildcfg,"llvm-tablegen")}" "%{path.join(wks.location,"third_party/llvm-project/llvm/include/llvm/'..input..'")}" '..flags..' -o "%{path.join(wks.location,"third_party/llvm-project/llvm/include/llvm/'..output..'")}"'
+end
+
+function clang_tablegen( output, input, flags )
+	return 'echo Clang TableGen on '..output..' && "%{path.join(wks.location,"bin",cfg.platform,cfg.buildcfg,"llvm-clang-tablegen")}" "%{path.join(wks.location,"third_party/llvm-project/clang/include/clang/'..input..'")}" '..flags..' -o "%{path.join(wks.location,"third_party/llvm-project/clang/include/clang/'..output..'")}"'
+end
+
 third_party_library 'glew'
 third_party_library 'glfw'
 third_party_library 'imgui'
 third_party_library 'llvm-clang-tablegen'
 third_party_library 'llvm-libclang'
 third_party_library 'llvm-libllvm'
+third_party_library 'llvm-libllvm-target'
 third_party_library 'llvm-tablegen'
 
 library 'Common'
@@ -33,6 +42,7 @@ app( 'Geno' )
 		'third_party/glew/include',
 		'third_party/glfw/include',
 		'third_party/imgui',
+		'third_party/llvm-project/clang/include',
 		'third_party/stb',
 	}
 
@@ -40,6 +50,7 @@ app( 'Geno' )
 		links {
 			'shell32',
 			'gdi32',
+			'Version',
 			'opengl32',
 		}
 
