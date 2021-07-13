@@ -239,7 +239,6 @@ private:
 	void        Copy( File& rFile, bool Cut );
 	void        Paste( File& rFile );
 	void        SwapLines( File& rFile, bool Up );
-	CXCursor    GetClangCursor( File& rFile, Cursor& rCursor );
 	uint32_t    GlyphColorFromTokenKind( CXTokenKind TokenKind );
 
 	Palette m_Palette;
