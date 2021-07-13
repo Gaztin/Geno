@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include <clang-c/Index.h>
 #include <imgui.h>
 
 #if defined( _WIN32 )
@@ -34,6 +35,10 @@ struct ImGuiTabBar;
 
 class TextEdit
 {
+	GENO_DISABLE_COPY_AND_MOVE( TextEdit );
+
+//////////////////////////////////////////////////////////////////////////
+
 public:
 	struct Palette
 	{
@@ -127,6 +132,8 @@ public:
 
 	struct File
 	{
+		CXTranslationUnit TranslationUnit;
+
 		std::filesystem::path Path;
 		std::string           Text;
 
@@ -144,7 +151,8 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////
 
-	TextEdit( void );
+	 TextEdit( void );
+	~TextEdit( void );
 
 	//////////////////////////////////////////////////////////////////////////
 
@@ -232,6 +240,8 @@ private:
 	Palette m_Palette;
 
 	//////////////////////////////////////////////////////////////////////////
+
+	CXIndex m_ClangIndex = { };
 
 	ImGuiTabBar* m_pTabBar = nullptr;
 
