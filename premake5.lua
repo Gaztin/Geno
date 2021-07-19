@@ -71,4 +71,6 @@ app( 'Geno' )
 			'IOKit.framework',
 			'AppKit.framework',
 			'OpenGL.framework',
+			'ncurses',
+			'z',
 		}
