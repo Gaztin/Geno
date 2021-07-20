@@ -1,0 +1,5 @@
+#include "../../llvm-project/llvm/lib/Support/regcomp.c"
+#include "../../llvm-project/llvm/lib/Support/regerror.c"
+#include "../../llvm-project/llvm/lib/Support/regexec.c"
+#include "../../llvm-project/llvm/lib/Support/regfree.c"
+#include "../../llvm-project/llvm/lib/Support/regstrlcpy.c"
