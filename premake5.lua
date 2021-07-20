@@ -13,20 +13,23 @@ platforms( utils.get_platforms() )
 configurations { 'Debug', 'Release' }
 startproject( 'Geno' )
 
+if( _OPTIONS.tablegen ) then
+	third_party_library 'llvm-libclang-td'
+	third_party_library 'llvm-libllvm-ir-td'
+	third_party_library 'llvm-libllvm-omp-td'
+	third_party_library 'llvm-libllvm-target-td'
+	third_party_library 'llvm-clang-tablegen'
+	third_party_library 'llvm-tablegen'
+end
+
 third_party_library 'glew'
 third_party_library 'glfw'
 third_party_library 'imgui'
 third_party_library 'llvm-libclang'
-third_party_library 'llvm-libclang-td'
 third_party_library 'llvm-libllvm-ir'
-third_party_library 'llvm-libllvm-ir-td'
 third_party_library 'llvm-libllvm-omp'
-third_party_library 'llvm-libllvm-omp-td'
 third_party_library 'llvm-libllvm-target'
-third_party_library 'llvm-libllvm-target-td'
 third_party_library 'llvm-libllvm'
-third_party_library 'llvm-clang-tablegen'
-third_party_library 'llvm-tablegen'
 
 library 'Common'
 	sysincludedirs {
