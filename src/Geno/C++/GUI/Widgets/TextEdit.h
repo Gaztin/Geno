@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include <clang-c/Index.h>
 #include <imgui.h>
 
 #if defined( _WIN32 )
@@ -34,21 +35,28 @@ struct ImGuiTabBar;
 
 class TextEdit
 {
+	GENO_DISABLE_COPY_AND_MOVE( TextEdit );
+
+//////////////////////////////////////////////////////////////////////////
+
 public:
 	struct Palette
 	{
-		unsigned int Default;
-		unsigned int Keyword;
-		unsigned int Number;
-		unsigned int String;
-		unsigned int Comment;
-		unsigned int LineNumber;
-		unsigned int Cursor;
-		unsigned int CursorInsert;
-		unsigned int Selection;
-		unsigned int CurrentLine;
-		unsigned int CurrentLineInactive;
-		unsigned int CurrentLineEdge;
+		uint32_t Default;
+		// Syntax highlighting
+		uint32_t Punctuation;
+		uint32_t Keyword;
+		uint32_t Identifier;
+		uint32_t Literal;
+		uint32_t Comment;
+		// Interface
+		uint32_t LineNumber;
+		uint32_t Cursor;
+		uint32_t CursorInsert;
+		uint32_t Selection;
+		uint32_t CurrentLine;
+		uint32_t CurrentLineInactive;
+		uint32_t CurrentLineEdge;
 	};
 
 	struct Glyph
@@ -127,6 +135,8 @@ public:
 
 	struct File
 	{
+		CXTranslationUnit TranslationUnit;
+
 		std::filesystem::path Path;
 		std::string           Text;
 
@@ -144,7 +154,8 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////
 
-	TextEdit( void );
+	 TextEdit( void );
+	~TextEdit( void );
 
 	//////////////////////////////////////////////////////////////////////////
 
@@ -228,10 +239,14 @@ private:
 	void        Copy( File& rFile, bool Cut );
 	void        Paste( File& rFile );
 	void        SwapLines( File& rFile, bool Up );
+	void        ApplySyntaxHighlighting( File& rFile );
+	uint32_t    GlyphColorFromTokenKind( CXTokenKind TokenKind );
 
 	Palette m_Palette;
 
 	//////////////////////////////////////////////////////////////////////////
+
+	CXIndex m_ClangIndex = { };
 
 	ImGuiTabBar* m_pTabBar = nullptr;
 

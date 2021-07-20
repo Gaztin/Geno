@@ -6,3 +6,9 @@ if _TARGET_OS == 'macosx' then
 		description = 'Target iOS'
 	}
 end
+
+-- Add switch to include LLVM TableGen projects in the build
+newoption {
+	trigger     = 'tablegen',
+	description = 'Toggle LLVM TableGen builds',
+}

@@ -51,20 +51,38 @@ TextEdit::TextEdit( void )
 		m_pTabBar->ID          = ID;
 	}
 
-	m_Palette.Default             = 0xFFf4f4f4;
-	m_Palette.Keyword             = 0xFF0000F0;
-	m_Palette.Number              = 0xFF303030;
-	m_Palette.String              = 0xFF9E5817;
-	m_Palette.Comment             = 0xFF0f5904;
-	m_Palette.LineNumber          = 0xFFF0F0F0;
-	m_Palette.Cursor              = 0xFFf8f8f8;
-	m_Palette.CursorInsert        = 0x80f8f8f8;
-	m_Palette.Selection           = 0x80a06020;
-	m_Palette.CurrentLine         = 0x40000000;
-	m_Palette.CurrentLineInactive = 0x40808080;
-	m_Palette.CurrentLineEdge     = 0x40a0a0a0;
+	// Set up palette
+	{
+		m_Palette.Default = 0xFFEEEEEE; // Barely white
+
+		// Syntax highlighting
+		m_Palette.Punctuation = 0xFF9B9B9B; // Gray
+		m_Palette.Keyword     = 0xFF20DFB9; // Lime green
+		m_Palette.Identifier  = 0xFFDCDCDC; // Light gray
+		m_Palette.Literal     = 0xFF859DD6; // Beige
+		m_Palette.Comment     = 0xFF4AA657; // Soft green
+
+		// Interface
+		m_Palette.LineNumber          = 0xFFF0F0F0;
+		m_Palette.Cursor              = 0xFFf8f8f8;
+		m_Palette.CursorInsert        = 0x80f8f8f8;
+		m_Palette.Selection           = 0x80a06020;
+		m_Palette.CurrentLine         = 0x40000000;
+		m_Palette.CurrentLineInactive = 0x40808080;
+		m_Palette.CurrentLineEdge     = 0x40a0a0a0;
+	}
+
+	m_ClangIndex = clang_createIndex( 1, 1 );
 
 } // TextEdit
+
+//////////////////////////////////////////////////////////////////////////
+
+TextEdit::~TextEdit( void )
+{
+	clang_disposeIndex( m_ClangIndex );
+
+} // ~TextEdit
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -176,9 +194,16 @@ void TextEdit::Show( bool* pOpen )
 			// Clear closed files from list
 			for( auto It = m_Files.begin(); It != m_Files.end(); )
 			{
-				if( It->Open ) It++;
+				if( It->Open )
+				{
+					++It;
+				}
 				else
+				{
+					// TODO: Write destructor for File that disposes the translation unit automatically
+					clang_disposeTranslationUnit( It->TranslationUnit );
 					It = m_Files.erase( It );
+				}
 			}
 
 			ImGui::EndTabBar();
@@ -224,10 +249,12 @@ void TextEdit::AddFile( const std::filesystem::path& rPath )
 	}
 
 	File File;
-	File.Path = rPath;
-	File.Text = Text;
+	File.Path            = rPath;
+	File.Text            = Text;
+	File.TranslationUnit = clang_parseTranslationUnit( m_ClangIndex, rPath.string().c_str(), nullptr, 0, nullptr, 0, clang_defaultEditingTranslationUnitOptions() );
 
 	SplitLines( File );
+	ApplySyntaxHighlighting( File );
 
 	m_Files.emplace_back( std::move( File ) );
 
@@ -327,7 +354,8 @@ std::vector< TextEdit::Line > TextEdit::SplitLines( const std::string String )
 	if( Lines.empty() ) Lines.emplace_back();
 
 	return Lines;
-}
+
+} // SplitLines
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -490,6 +518,8 @@ bool TextEdit::RenderEditor( File& rFile )
 		{
 			if( rGlyph.Color != PrevColor || rGlyph.C == '\t' && !StringBuffer.empty() )
 			{
+				if( rGlyph.C != '\t' ) StringBuffer.push_back( rGlyph.C );
+
 				pDrawList->AddText( ImVec2( Pos.x + XOffset, Pos.y ), PrevColor, StringBuffer.c_str() );
 				float TextWidth = ImGui::GetFont()->CalcTextSizeA( ImGui::GetFontSize(), FLT_MAX, -1.0f, StringBuffer.c_str() ).x;
 				XOffset += TextWidth;
@@ -1517,6 +1547,7 @@ void TextEdit::Enter( File& rFile )
 	}
 
 	ScrollToCursor( rFile );
+	ApplySyntaxHighlighting( rFile );
 
 	Props.CursorBlink = 0;
 
@@ -1581,6 +1612,7 @@ void TextEdit::Backspace( File& rFile )
 	}
 
 	ScrollToCursor( rFile );
+	ApplySyntaxHighlighting( rFile );
 
 	Props.CursorBlink = 0;
 
@@ -1594,6 +1626,8 @@ void TextEdit::Del( File& rFile )
 	{
 		Del( rFile, i );
 	}
+
+	ApplySyntaxHighlighting( rFile );
 
 } // Del
 
@@ -1842,6 +1876,7 @@ void TextEdit::EnterTextStuff( File& rFile, char C, bool Shift )
 	}
 
 	ScrollToCursor( rFile );
+	ApplySyntaxHighlighting( rFile );
 
 	Props.CursorBlink = 0;
 
@@ -2375,6 +2410,11 @@ void TextEdit::Copy( File& rFile, bool Cut )
 		}
 	}
 
+	if( Cut )
+	{
+		ApplySyntaxHighlighting( rFile );
+	}
+
 	if( !ClipBuffer.empty() )
 	{
 		ClipBuffer.erase( ClipBuffer.end() - 1 );
@@ -2442,6 +2482,8 @@ void TextEdit::Paste( File& rFile )
 
 		Props.Changes = true;
 	}
+
+	ApplySyntaxHighlighting( rFile );
 
 } // Paste
 
@@ -2514,7 +2556,96 @@ void TextEdit::SwapLines( File& rFile, bool Up )
 	rLines.erase( rLines.begin() + LineToDelete );
 
 	ScrollToCursor( rFile );
+	ApplySyntaxHighlighting( rFile );
 
 	Props.Changes = true;
 
 } // SwapLines
+
+//////////////////////////////////////////////////////////////////////////
+
+void TextEdit::ApplySyntaxHighlighting( File& rFile )
+{
+	const std::string FilePath = rFile.Path.string();
+
+	JoinLines( rFile );
+
+	CXUnsavedFile UnsavedFile;
+	UnsavedFile.Filename = FilePath.c_str();
+	UnsavedFile.Contents = rFile.Text.c_str();
+	UnsavedFile.Length   = rFile.Text.size();
+
+	if( clang_reparseTranslationUnit( rFile.TranslationUnit, 1, &UnsavedFile, clang_defaultEditingTranslationUnitOptions() ) != CXError_Success )
+		return;
+
+	CXFile           SourceFile  = clang_getFile( rFile.TranslationUnit, FilePath.c_str() );
+	CXSourceLocation SourceBegin = clang_getLocation( rFile.TranslationUnit, SourceFile, 1, 1 );
+	CXSourceLocation SourceEnd   = clang_getLocation( rFile.TranslationUnit, SourceFile, rFile.Lines.size(), rFile.Lines.back().size() + 1 );
+	CXSourceRange    SourceRange = clang_getRange( SourceBegin, SourceEnd );
+	CXToken*         pTokens     = nullptr;
+	uint32_t         NumTokens   = 0;
+
+	clang_tokenize( rFile.TranslationUnit, SourceRange, &pTokens, &NumTokens );
+
+	for( uint32_t TokenIndex = 0; TokenIndex < NumTokens; ++TokenIndex )
+	{
+		CXToken&         rToken      = pTokens[ TokenIndex ];
+		CXTokenKind      TokenKind   = clang_getTokenKind( rToken );
+		CXSourceRange    TokenExtent = clang_getTokenExtent( rFile.TranslationUnit, rToken );
+		CXSourceLocation TokenStart  = clang_getRangeStart( TokenExtent );
+		CXSourceLocation TokenEnd    = clang_getRangeEnd( TokenExtent );
+		uint32_t         TokenStartLine;
+		uint32_t         TokenStartColumn;
+		uint32_t         TokenEndLine;
+		uint32_t         TokenEndColumn;
+
+		clang_getFileLocation( TokenStart, nullptr, &TokenStartLine, &TokenStartColumn, nullptr );
+		clang_getFileLocation( TokenEnd,   nullptr, &TokenEndLine,   &TokenEndColumn,   nullptr );
+
+		// It's unclear this is needed, but the coordinates are off if we don't do this
+		if( TokenStartColumn > 1 ) --TokenStartColumn;
+		if( TokenEndColumn   > 1 ) --TokenEndColumn;
+
+		if( TokenStartLine == TokenEndLine )
+		{
+			Line& rLine = rFile.Lines[ TokenStartLine - 1 ];
+
+			for( uint32_t Column = TokenStartColumn; Column <= ( TokenEndColumn > rLine.size() ? rLine.size() : TokenEndColumn ); ++Column )
+				rLine[ Column - 1 ].Color = GlyphColorFromTokenKind( TokenKind );
+		}
+		else
+		{
+			Line& rStartLine = rFile.Lines[ TokenStartLine - 1 ];
+			Line& rEndLine   = rFile.Lines[ TokenEndLine - 1 ];
+
+			for( uint32_t Column = TokenStartColumn; Column <= rStartLine.size(); ++Column )
+				rStartLine[ Column - 1 ].Color = GlyphColorFromTokenKind( TokenKind );
+
+			for( uint32_t Row = TokenStartLine + 1; Row < TokenEndLine; ++Row )
+				for( Glyph& rGlyph : rFile.Lines[ Row - 1 ] )
+					rGlyph.Color = GlyphColorFromTokenKind( TokenKind );
+
+			for( uint32_t Column = 1; Column <= ( TokenEndColumn > rEndLine.size() ? rEndLine.size() : TokenEndColumn ); ++Column )
+				rEndLine[ Column - 1 ].Color = GlyphColorFromTokenKind( TokenKind );
+		}
+	}
+
+	clang_disposeTokens( rFile.TranslationUnit, pTokens, NumTokens );
+
+} // ApplySyntaxHighlighting
+
+//////////////////////////////////////////////////////////////////////////
+
+uint32_t TextEdit::GlyphColorFromTokenKind( CXTokenKind TokenKind )
+{
+	switch( TokenKind )
+	{
+		case CXToken_Comment:     return m_Palette.Comment;
+		case CXToken_Identifier:  return m_Palette.Identifier;
+		case CXToken_Keyword:     return m_Palette.Keyword;
+		case CXToken_Literal:     return m_Palette.Literal;
+		case CXToken_Punctuation: return m_Palette.Punctuation;
+		default:                  return m_Palette.Default;
+	}
+
+} // GlyphColorFromTokenKind
